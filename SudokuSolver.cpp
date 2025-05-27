@@ -710,7 +710,22 @@ vector<Mat_<uchar>> splitSudokuGrid(const Mat_<uchar>& sudokuBoard, Size templat
     }
     return cells;
 }
-
+int countBlackPixels(const Mat_<uchar> img) {
+    int count = 0;
+    for (int row = 0; row < img.rows; ++row) {
+        for (int col = 0; col < img.cols; ++col)
+            if (img(row, col) == 0) count++;
+    }
+    return count;
+}
+vector<int> getBlackPixelCounts(const vector<Mat_<uchar>>& digitTemplates) {
+    vector<int> blackCounts;
+    for (const auto& tmpl : digitTemplates) {
+        int black = tmpl.total() - countNonZero(tmpl);
+        blackCounts.push_back(black);
+    }
+    return blackCounts;
+}
 //int recognizeDigit(const Mat_<uchar>& cell, const vector<Mat_<uchar>>& digitTemplates) {
 //    // Preprocess the cell for better matching
 //    Mat_<uchar> processedCell;
@@ -836,13 +851,24 @@ double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl) {
     resize(cell, resizedCell, tmpl.size()); 
     Mat_<uchar> removedBorder = removeCellBorder(resizedCell,14);
     Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
-    imshow("im", centered);
-    waitKey(0);
+    /*imshow("im", centered);
+    waitKey(0); */
     int matchCount = 0, total = cell.rows * cell.cols;
     for (int y = 0; y < centered.rows; ++y)
         for (int x = 0; x < centered.cols; ++x)
             if (centered(y, x) == 0 && tmpl(y, x) == 0) matchCount++;
     return double(matchCount);  
+}
+int blackPixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl) {
+    Mat_<uchar> resizedCell;
+    resize(cell, resizedCell, tmpl.size());
+    Mat_<uchar> removedBorder = removeCellBorder(resizedCell, 14);
+    Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
+    /*imshow("im", centered);
+    waitKey(0);*/
+    int count = countBlackPixels(centered);
+    //cout << count;
+    return count;
 }
 Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat_<uchar>>& digitTemplates) {
     Mat_<int> grid(9, 9); grid.setTo(0);
@@ -874,7 +900,7 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
             }
         }
         // Only accept confident matches
-        if (bestScore <  20)  // adjust threshold if needed
+        if (bestScore < 20)  // adjust threshold if needed
             grid(row, col) = 0;
         else
             grid(row, col) = bestDigit;
