@@ -802,14 +802,46 @@ Mat_<uchar> removeCellBorder(const Mat_<uchar>& cell, int borderWidth = 2) {
         }
     return cellNoBorder;
 }
+Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, cv::Size targetSize = Size(98, 100)) {
+    // 1. Find bounding box of black pixels
+    Mat_<uchar> bin;
+    threshold(cell, bin, 0, 255, THRESH_BINARY | THRESH_OTSU); // White bg, black digit
+    // Invert for findNonZero (so digit=white on black)
+    Mat inv = 255 - bin;
+    vector<Point> pts;
+    findNonZero(inv, pts);
+    if (pts.empty()) // If empty, just return blank image
+        return Mat_<uchar>(targetSize, uchar(255));
+    Rect bbox = boundingRect(pts);
+    Mat digitCrop = bin(bbox);
+
+    // 2. Compute scale to fit inside targetSize with margin
+    int margin = 6; // like Pillow's natural text padding
+    int maxW = targetSize.width - 2 * margin, maxH = targetSize.height - 2 * margin;
+    double scale =  min(double(maxW) / bbox.width, double(maxH) / bbox.height);
+    int newW =  max(1, int(bbox.width * scale));
+    int newH = max(1, int(bbox.height * scale));
+    Mat digitResized;
+    resize(digitCrop, digitResized, Size(newW, newH), 0, 0, INTER_AREA);
+
+    // 3. Place centered in white canvas
+    Mat_<uchar> output(targetSize, uchar(255));
+    int x = (targetSize.width - newW) / 2;
+    int y = (targetSize.height - newH) / 2;
+    digitResized.copyTo(output(Rect(x, y, newW, newH)));
+    return output;
+}
 double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl) {
     Mat_<uchar> resizedCell;
     resize(cell, resizedCell, tmpl.size()); 
-    Mat_<uchar> removedBorder = removeCellBorder(resizedCell,14); 
+    Mat_<uchar> removedBorder = removeCellBorder(resizedCell,14);
+    Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
+    imshow("im", centered);
+    waitKey(0);
     int matchCount = 0, total = cell.rows * cell.cols;
-    for (int y = 0; y < removedBorder.rows; ++y)
-        for (int x = 0; x < removedBorder.cols; ++x)
-            if (removedBorder(y, x) == 0 && tmpl(y, x) == 0) matchCount++; 
+    for (int y = 0; y < centered.rows; ++y)
+        for (int x = 0; x < centered.cols; ++x)
+            if (centered(y, x) == 0 && tmpl(y, x) == 0) matchCount++;
     return double(matchCount);  
 }
 Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat_<uchar>>& digitTemplates) {
