@@ -25,70 +25,6 @@ using namespace std;
 using namespace cv;
 wchar_t* projectPath;
 
-void testOpenImage()
-{
-    char fname[MAX_PATH];
-    while (openFileDlg(fname))
-    {
-        Mat src;
-        src = imread(fname);
-        imshow("image", src);
-        waitKey();
-    }
-}
-
-void testOpenImagesFld()
-{
-    char folderName[MAX_PATH];
-    if (openFolderDlg(folderName) == 0)
-        return;
-    char fname[MAX_PATH];
-    FileGetter fg(folderName, "bmp");
-    while (fg.getNextAbsFile(fname))
-    {
-        Mat src;
-        src = imread(fname);
-        imshow(fg.getFoundFileName(), src);
-        if (waitKey() == 27) //ESC pressed
-            break;
-    }
-}
-
-void testImageOpenAndSave()
-{
-    _wchdir(projectPath);
-
-    Mat src, dst;
-
-    src = imread("Images/Lena_24bits.bmp", IMREAD_COLOR);	// Read the image
-
-    if (!src.data)	// Check for invalid input
-    {
-        printf("Could not open or find the image\n");
-        return;
-    }
-
-    // Get the image resolution
-    Size src_size = Size(src.cols, src.rows);
-
-    // Display window
-    const char* WIN_SRC = "Src"; //window for the source image
-    namedWindow(WIN_SRC, WINDOW_AUTOSIZE);
-    moveWindow(WIN_SRC, 0, 0);
-
-    const char* WIN_DST = "Dst"; //window for the destination (processed) image
-    namedWindow(WIN_DST, WINDOW_AUTOSIZE);
-    moveWindow(WIN_DST, src_size.width + 10, 0);
-
-    cvtColor(src, dst, COLOR_BGR2GRAY); //converts the source image to a grayscale one
-
-    imwrite("Images/Lena_24bits_gray.bmp", dst); //writes the destination to file
-
-    imshow(WIN_SRC, src);
-    imshow(WIN_DST, dst);
-
-    waitKey(0);
-}
 //-----------------------------------------Sudoku Solver
 //
 //---------------Blur
@@ -293,11 +229,7 @@ Mat_ <uchar> canny_edge_detection(Mat_<uchar> img) {
     Mat_<float> sk_x = (Mat_<float>(3, 3) << -1, 0, 1, -2, 0, 2, -1, 0, 1);
     Mat_<float> sk_y = (Mat_<float>(3, 3) << 1, 2, 1, 0, 0, 0, -1, -2, -1);
     Mat_<float> imgx = convolution(img, sk_x);
-    Mat_<float> imgy = convolution(img, sk_y);
-    //imshow("IMG", img);
-    //imshow("IMG  x", abs(imgx) / 255);
-    //imshow("IMG  y", abs(imgy) / 255);
-    //waitKey(0);
+    Mat_<float> imgy = convolution(img, sk_y); 
     int r = img.rows;
     int c = img.cols;
     Mat_<float> mag(r, c);
@@ -414,14 +346,14 @@ Mat_<uchar> dilation(Mat_<uchar> src, Mat_<uchar> str_el) {
 
     for (int i = 0; i < src.rows; i++) {
         for (int j = 0; j < src.cols; j++) {
-            if (src(i, j) == 255) {  // WHITE = foreground now
+            if (src(i, j) == 255) {  
                 for (int u = 0; u < str_el.rows; u++) {
                     for (int v = 0; v < str_el.cols; v++) {
-                        if (str_el(u, v) == 0) {  // structuring element active
+                        if (str_el(u, v) == 0) {  
                             int new_i = i + u - str_el.rows / 2;
                             int new_j = j + v - str_el.cols / 2;
                             if (isInside(src, new_i, new_j)) {
-                                dst(new_i, new_j) = 255;  // spread WHITE
+                                dst(new_i, new_j) = 255;    
                             }
                         }
                     }
@@ -600,32 +532,34 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     imshow("Gray Image", gray);
     waitKey(0); 
  
-    //-----Blur&Treshhold  using canny
- 
-    Mat_<uchar> thresh = canny_edge_detection(gray);
-    imshow("Threshold Image", thresh);
+    //-----Blur & Treshhold & Edge detection
+     Mat_<uchar> edges = canny_edge_detection(gray);
+    imshow("Canny Edges", edges);
     waitKey(0); 
-    Mat_<uchar> thresh2 = edge_linking(thresh, 100, 170);
-    imshow("Threshold Image", thresh2);
+    Mat_<uchar> linked = edge_linking(edges, 100, 170);
+    imshow("Linked Edges", linked);
     waitKey(0); 
     uchar data[] = {
         0,   0,   0,
         0,   0,   0,
         0,   0,   0
     };
+
+    //-----Dilation to make the borders bigger
     Mat_<uchar> str_el(3, 3, data);
-    Mat_<uchar> dil = dilation(thresh2, str_el);
-    imshow("Threshold Image Dilatation", dil);
+    Mat_<uchar> dil = dilation(linked, str_el);
+    imshow("Image Dilation", dil);
     waitKey(0); 
+
     //-----Contours 
     vector<vector<Point>> contours = borderTrace(dil);
     Mat contourImage2 = drawBorders(sudokuImage, contours);
-      imshow("All Contours", contourImage2);
-     waitKey(0); 
+    imshow("All Contours", contourImage2);
+    waitKey(0); 
 
+    //Find biggest contour
     double maxArea = 0;
     vector<Point> biggest;
-
     for (auto& contour : contours)
     {
         double area = contourArea(contour);
@@ -646,8 +580,8 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     {
         vector<vector<Point>> drawBiggest = { biggest };
         Mat boardOutline = drawBorders(sudokuImage, drawBiggest);
-         imshow("Biggest Contour", boardOutline);
-         waitKey(0); 
+        imshow("Biggest Contour", boardOutline);
+        waitKey(0); 
     }
 
 
@@ -657,8 +591,7 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
         return sudokuImage;
     }
 
-    Point2f src[4];
-    Point2f dst[4];
+    Point2f src[4]; 
 
     sort(biggest.begin(), biggest.end(), [](Point a, Point b) { return a.y < b.y; });
     if (biggest[0].x < biggest[1].x)
@@ -682,14 +615,9 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
         src[2] = biggest[3];
         src[3] = biggest[2];
     }
-
-    dst[0] = Point2f(0, 0);
-    dst[1] = Point2f(800, 0);
-    dst[2] = Point2f(0, 800);
-    dst[3] = Point2f(800, 800);
-
-    Mat matrix = getPerspectiveTransform(src, dst);
+     
     Mat warped = warpSudokuBoard(sudokuImage, biggest);
+    
     imshow("Warped Sudoku Board", warped);
     waitKey(0); 
 
@@ -778,13 +706,6 @@ Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(
     return output;
 }
 double pixelMatchScore(const Mat_<uchar>& centered, const Mat_<uchar>& tmpl,int i) {
-    
-    /*  if (i == 0) {
-        imshow("1", cell);
-        imshow("2", removedBorder);
-        imshow("3", centered);
-        waitKey(0);
-    } */  
     int matchCount = 0, cellBlack = 0, tmplBlack = 0;
     for (int y = 0; y < centered.rows; ++y)
         for (int x = 0; x < centered.cols; ++x) {
@@ -815,35 +736,37 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
     for (int idx = 0; idx < cells.size(); ++idx) {
         int row = idx / 9, col = idx % 9;
         Mat_<uchar> cell = cells[idx].clone();
+        //Thresholding the cell
         Mat_<uchar> thCell = thresholding(cell);
+        //Resize
         Mat_<uchar> resizedCell;
         resize(thCell, resizedCell, digitTemplates[0].size());
+        //Remove borgers and center digit
         Mat_<uchar> removedBorder = removeBorderObjects(resizedCell);
-        Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
-         
+        Mat_<uchar> centered = centerAndScaleDigit(removedBorder); 
+        //Check if cell is empty
         double blackRatio = (centered.total() - countNonZero(centered)) / double(centered.total());
         if (blackRatio < 0.07) { 
             grid(row, col) = 0; continue; 
         }
-
+        //Digit Recognition
         int bestDigit = 0;
         double bestScore = 0.0;
         for (int i = 0; i < digitTemplates.size(); ++i) {
-            double score = pixelMatchScore(centered, digitTemplates[i],i);
-            cout << "Digit score for : " << i + 1 << " : " << score << endl;
+            double score = pixelMatchScore(centered, digitTemplates[i],i); 
             if (score > bestScore) {
                 bestScore = score;
-                bestDigit = i + 1;
+
+                bestDigit = i % 9 +1;
             }
         }
-        cout << "!!!!!!!!!!!!!!!! Found digit : " << bestDigit << endl;
         
         if (bestScore < 0.01)  
             grid(row, col) = 0;
         else
             grid(row, col) = bestDigit;
     }
-    return grid;
+     return grid;
 }
 //---------------Print
 void printSudokuMatrix(const Mat_<int>& grid) {
@@ -858,12 +781,44 @@ void printSudokuMatrix(const Mat_<int>& grid) {
             cout << "------+-------+------" << endl;
     }
 }
+Mat drawSudokuMatrix(const Mat_<int>& grid, int cellSize = 50) {
+    int n = 9;
+    int imgSize = n * cellSize + 1;
+    Mat sudokuImg(imgSize, imgSize, CV_8UC3, Scalar(255, 255, 255));
+
+    //Draw grid lines
+    for (int i = 0; i <= n; i++) {
+        int thickness = (i % 3 == 0) ? 3 : 1;
+        line(sudokuImg, Point(0, i * cellSize), Point(imgSize, i * cellSize), Scalar(0, 0, 0), thickness);
+        line(sudokuImg, Point(i * cellSize, 0), Point(i * cellSize, imgSize), Scalar(0, 0, 0), thickness);
+    } 
+    //Draw numbers
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            int num = grid(i, j);
+            if (num > 0) {
+                string text = to_string(num);
+                int font = FONT_HERSHEY_SIMPLEX;
+                double fontScale = 1.0;
+                int thickness = 2;
+                int baseline = 0;
+                Size textSize = getTextSize(text, font, fontScale, thickness, &baseline);
+                Point textOrg(j * cellSize + (cellSize - textSize.width) / 2,
+                    i * cellSize + (cellSize + textSize.height) / 2);
+                putText(sudokuImg, text, textOrg, font, fontScale, Scalar(0, 0, 0), thickness);
+            }
+        }
+    }
+    imshow("Sudoku", sudokuImg);
+    waitKey(0);
+    return sudokuImg;
+}
 //---------------Load  
 vector<Mat_<uchar>> loadDigitTemplates() {
     _wchdir(projectPath);
     _wchdir(L"Digits");
     vector<Mat_<uchar>> templates;
-    for (int digit = 1; digit <= 9; digit++) {
+    for (int digit = 1; digit <=118; digit++) {
         string filename = "nr_" + to_string(digit) + ".png";
         Mat_<uchar> img = imread(filename, IMREAD_GRAYSCALE);
         if (img.empty()) {
@@ -872,6 +827,7 @@ vector<Mat_<uchar>> loadDigitTemplates() {
         } 
         templates.push_back(img);
     }
+    //My data set conytains 118 pictures
     return templates;
 }
 void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
@@ -893,9 +849,9 @@ void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
         waitKey(0); 
         Mat_<uchar> wrappedSudoku = localizeSudoku(sudokuImage);
         vector<Mat_<uchar>> cells = splitSudokuGrid(wrappedSudoku);
-        //showFirstNineCells(cells);
         Mat_<int> grid = recognizeSudokuGrid(cells, digitTemplates);
         printSudokuMatrix(grid);
+        drawSudokuMatrix(grid);
         waitKey(0);
         break;
     }
