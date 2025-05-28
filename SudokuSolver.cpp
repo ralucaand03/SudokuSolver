@@ -759,14 +759,51 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
 
                 bestDigit = i % 9 +1;
             }
-        }
-        
+        }        
         if (bestScore < 0.01)  
             grid(row, col) = 0;
         else
             grid(row, col) = bestDigit;
     }
      return grid;
+}
+//---------------Solve
+bool isValid(const Mat_<int>& grid, int row, int col, int num) {
+    for (int i = 0; i < 9; i++) {
+        if (grid(row, i) == num || grid(i, col) == num)
+            return false;
+    }
+    int boxRow = row - row % 3, boxCol = col - col % 3;
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+            if (grid(boxRow + i, boxCol + j) == num)
+                return false;
+    return true;
+}
+bool solveSudokuHelper(Mat_<int>& grid) {
+    for (int row = 0; row < 9; row++) {
+        for (int col = 0; col < 9; col++) {
+            if (grid(row, col) == 0) {
+                for (int num = 1; num <= 9; num++) {
+                    if (isValid(grid, row, col, num)) {
+                        grid(row, col) = num;
+                        if (solveSudokuHelper(grid))
+                            return true;
+                        grid(row, col) = 0;
+                    }
+                }
+                return false; 
+            }
+        }
+    }
+    return true;  
+}
+Mat_<int> solveSudoku(const Mat_<int>& inputGrid) {
+    Mat_<int> grid = inputGrid.clone();
+    if (solveSudokuHelper(grid))
+        return grid;  
+    else
+        return inputGrid;  
 }
 //---------------Print
 void printSudokuMatrix(const Mat_<int>& grid) {
@@ -781,7 +818,7 @@ void printSudokuMatrix(const Mat_<int>& grid) {
             cout << "------+-------+------" << endl;
     }
 }
-Mat drawSudokuMatrix(const Mat_<int>& grid, int cellSize = 50) {
+Mat drawSudokuMatrix(const Mat_<int>& grid,int ok, int cellSize = 50) {
     int n = 9;
     int imgSize = n * cellSize + 1;
     Mat sudokuImg(imgSize, imgSize, CV_8UC3, Scalar(255, 255, 255));
@@ -809,7 +846,12 @@ Mat drawSudokuMatrix(const Mat_<int>& grid, int cellSize = 50) {
             }
         }
     }
-    imshow("Sudoku", sudokuImg);
+    if (ok == 1) {
+        imshow("Solved Sudoku", sudokuImg);
+    }
+    else {
+        imshow("Unsolved Sudoku", sudokuImg);
+    }
     waitKey(0);
     return sudokuImg;
 }
@@ -818,7 +860,7 @@ vector<Mat_<uchar>> loadDigitTemplates() {
     _wchdir(projectPath);
     _wchdir(L"Digits");
     vector<Mat_<uchar>> templates;
-    for (int digit = 1; digit <=118; digit++) {
+    for (int digit = 1; digit <=135; digit++) {
         string filename = "nr_" + to_string(digit) + ".png";
         Mat_<uchar> img = imread(filename, IMREAD_GRAYSCALE);
         if (img.empty()) {
@@ -827,7 +869,7 @@ vector<Mat_<uchar>> loadDigitTemplates() {
         } 
         templates.push_back(img);
     }
-    //My data set conytains 118 pictures
+    //My data set conytains 135 pictures
     return templates;
 }
 void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
@@ -850,8 +892,14 @@ void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
         Mat_<uchar> wrappedSudoku = localizeSudoku(sudokuImage);
         vector<Mat_<uchar>> cells = splitSudokuGrid(wrappedSudoku);
         Mat_<int> grid = recognizeSudokuGrid(cells, digitTemplates);
+        cout << " Unsolved Sudoku " << endl;
         printSudokuMatrix(grid);
-        drawSudokuMatrix(grid);
+        drawSudokuMatrix(grid,0);
+        waitKey(0);
+        Mat_<int> solved = solveSudoku(grid);
+        cout << " Solved Sudoku " << endl;
+        printSudokuMatrix(solved);
+        drawSudokuMatrix(solved,1);
         waitKey(0);
         break;
     }
