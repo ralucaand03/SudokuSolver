@@ -228,7 +228,6 @@ Mat_<uchar> multilevel_thresholding(Mat_<uchar> img) {
     return result;
 }
 Mat_<uchar>  thresholding(Mat_<uchar>& img) {
-
     int i_min = INT_MAX;
     int i_max = INT_MIN;
 
@@ -280,11 +279,11 @@ Mat_<uchar>  thresholding(Mat_<uchar>& img) {
         {
             if (img(i, j) < T)
             {
-                result(i, j) = 255;
+                result(i, j) = 0;
             }
             else
             {
-                result(i, j) = 0;
+                result(i, j) = 255;
             }
         }
     }
@@ -778,11 +777,8 @@ Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(
 
     return output;
 }
-double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl,int i) {
-    Mat_<uchar> resizedCell;
-    resize(cell, resizedCell, tmpl.size());
-    Mat_<uchar> removedBorder = removeBorderObjects(resizedCell );
-    Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
+double pixelMatchScore(const Mat_<uchar>& centered, const Mat_<uchar>& tmpl,int i) {
+    
     /*  if (i == 0) {
         imshow("1", cell);
         imshow("2", removedBorder);
@@ -819,19 +815,21 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
     for (int idx = 0; idx < cells.size(); ++idx) {
         int row = idx / 9, col = idx % 9;
         Mat_<uchar> cell = cells[idx].clone();
-        
-        Mat_<uchar> thCell;
-        threshold(cell, thCell, 0, 255, THRESH_BINARY | THRESH_OTSU);
-
-        /*imshow("cell", thCell);
-        waitKey(0);*/
-        double blackRatio = (thCell.total() - countNonZero(thCell)) / double(thCell.total());
-        if (blackRatio < 0.07) { grid(row, col) = 0; continue; }
+        Mat_<uchar> thCell = thresholding(cell);
+        Mat_<uchar> resizedCell;
+        resize(thCell, resizedCell, digitTemplates[0].size());
+        Mat_<uchar> removedBorder = removeBorderObjects(resizedCell);
+        Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
+         
+        double blackRatio = (centered.total() - countNonZero(centered)) / double(centered.total());
+        if (blackRatio < 0.07) { 
+            grid(row, col) = 0; continue; 
+        }
 
         int bestDigit = 0;
         double bestScore = 0.0;
         for (int i = 0; i < digitTemplates.size(); ++i) {
-            double score = pixelMatchScore(thCell, digitTemplates[i],i);
+            double score = pixelMatchScore(centered, digitTemplates[i],i);
             cout << "Digit score for : " << i + 1 << " : " << score << endl;
             if (score > bestScore) {
                 bestScore = score;
