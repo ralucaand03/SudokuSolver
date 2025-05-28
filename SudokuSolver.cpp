@@ -485,58 +485,7 @@ vector<vector<Point>> borderTrace(const Mat_<uchar>& img) {
     }
     return allBorders;
 }
-vector<vector<Point>> borderTraceBlack(const Mat_<uchar>& img) {
-    int di[8] = { 0, -1, -1, -1, 0,  1,  1, 1 };
-    int dj[8] = { 1,  1,  0, -1, -1, -1, 0, 1 };
 
-    vector<vector<Point>> allBorders;
-    Mat_<uchar> visited = Mat_<uchar>::zeros(img.size());
-
-    for (int i = 0; i < img.rows; i++) {
-        for (int j = 0; j < img.cols; j++) {
-            if (img(i, j) == 0 && visited(i, j) == 0) { // Changed 255 -> 0
-                vector<Point> border;
-
-                Point startPoint(j, i);
-                Point currentPoint = startPoint;
-                border.push_back(currentPoint);
-                visited(i, j) = 1;
-
-                int dir = 0;
-
-                bool borderComplete = false;
-                while (!borderComplete) {
-                    bool foundNext = false;
-
-                    for (int k = 0; k < 8; k++) {
-                        int newDir = (dir + k) % 8;
-
-                        int ni = currentPoint.y + di[newDir];
-                        int nj = currentPoint.x + dj[newDir];
-
-                        if (ni >= 0 && ni < img.rows && nj >= 0 && nj < img.cols && img(ni, nj) == 0 && visited(ni, nj) == 0) {
-                            currentPoint = Point(nj, ni);
-                            border.push_back(currentPoint);
-                            visited(ni, nj) = 1;
-
-                            dir = (newDir + 5) % 8;
-                            foundNext = true;
-                            break;
-                        }
-                    }
-                    if (!foundNext || (border.size() > 2 && currentPoint == startPoint)) {
-                        borderComplete = true;
-                    }
-                }
-                if (border.size() > 50) {
-                    allBorders.push_back(border);
-                }
-            }
-        }
-    }
-    return allBorders;
-}
-  
 vector<vector<Point>> objectPixelsBlack(const Mat_<uchar>& img) {
     int di[8] = { 0, -1, -1, -1, 0,  1,  1, 1 };
     int dj[8] = { 1,  1,  0, -1, -1, -1, 0, 1 };
@@ -604,16 +553,33 @@ Mat drawBorders(const Mat& img, const vector<vector<Point>>& borders) {
     return result;
 }
 //---------------Wrap board
+vector<Point2f> sortCorners(const vector<Point>& corners) {
+    vector<Point2f> ordered(4); 
+    vector<int> sum, diff;
+    for (auto& pt : corners) {
+        sum.push_back(pt.x + pt.y);
+        diff.push_back(pt.y - pt.x);
+    } 
+    auto tlIdx = min_element(sum.begin(), sum.end()) - sum.begin();
+    auto brIdx = max_element(sum.begin(), sum.end()) - sum.begin(); 
+    auto trIdx = min_element(diff.begin(), diff.end()) - diff.begin(); 
+    auto blIdx = max_element(diff.begin(), diff.end()) - diff.begin();
+    ordered[0] = corners[tlIdx]; // Top-left
+    ordered[1] = corners[trIdx]; // Top-right
+    ordered[2] = corners[blIdx]; // Bottom-left
+    ordered[3] = corners[brIdx]; // Bottom-right
+    return ordered;
+}
 Mat warpSudokuBoard(const Mat& inputImage, const vector<Point>& corners, Size outputSize = Size(800, 800)) {
     if (corners.size() != 4) {
         cerr << "Error: corners vector must contain exactly 4 points." << endl;
         return inputImage.clone();
     }
-
+    vector<Point2f> ord = sortCorners(corners);
     Point2f src[4];
     for (int i = 0; i < 4; i++) {
-        src[i] = corners[i];
-    }
+        src[i] = ord[i];
+    } 
 
     Point2f dst[4] = {
         Point2f(0, 0),
@@ -634,24 +600,17 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
 {
     Mat gray;
     cvtColor(sudokuImage, gray, COLOR_BGR2GRAY);
-    /* imshow("Gray Image", gray);
-     waitKey(0);*/
-
-     //-----Blur  
-     //Mat_<uchar> blurred = gaussian_2D(gray, 4);
-     //imshow("Blurred Image", blurred);
-     //waitKey(0);
-
-     //-----Treshhold  
-     /*Mat_<uchar> thresh = thresholding(blurred);
-     imshow("Threshold Image", thresh);
-     waitKey(0);*/
+    imshow("Gray Image", gray);
+    waitKey(0); 
+ 
+    //-----Blur&Treshhold  using canny
+ 
     Mat_<uchar> thresh = canny_edge_detection(gray);
-    /*imshow("Threshold Image", thresh);
-    waitKey(0);*/
+    imshow("Threshold Image", thresh);
+    waitKey(0); 
     Mat_<uchar> thresh2 = edge_linking(thresh, 100, 170);
-    /* imshow("Threshold Image", thresh2);
-     waitKey(0);*/
+    imshow("Threshold Image", thresh2);
+    waitKey(0); 
     uchar data[] = {
         0,   0,   0,
         0,   0,   0,
@@ -659,13 +618,13 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     };
     Mat_<uchar> str_el(3, 3, data);
     Mat_<uchar> dil = dilation(thresh2, str_el);
-    /* imshow("Threshold Image Dilatation", dil);
-     waitKey(0);*/
-     //-----Contours 
+    imshow("Threshold Image Dilatation", dil);
+    waitKey(0); 
+    //-----Contours 
     vector<vector<Point>> contours = borderTrace(dil);
     Mat contourImage2 = drawBorders(sudokuImage, contours);
-    /* imshow("All Contours", contourImage2);
-     waitKey(0);*/
+      imshow("All Contours", contourImage2);
+     waitKey(0); 
 
     double maxArea = 0;
     vector<Point> biggest;
@@ -690,8 +649,8 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     {
         vector<vector<Point>> drawBiggest = { biggest };
         Mat boardOutline = drawBorders(sudokuImage, drawBiggest);
-        /* imshow("Biggest Contour", boardOutline);
-         waitKey(0);*/
+         imshow("Biggest Contour", boardOutline);
+         waitKey(0); 
     }
 
 
@@ -734,28 +693,12 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
 
     Mat matrix = getPerspectiveTransform(src, dst);
     Mat warped = warpSudokuBoard(sudokuImage, biggest);
-    /*imshow("Warped Sudoku Board", warped);
-    waitKey(0);*/
+    imshow("Warped Sudoku Board", warped);
+    waitKey(0); 
 
     return warped;
 }
 //---------------Cells
-void showSudokuCells(const Mat_<uchar>& sudokuBoard) {
-    int cellHeight = sudokuBoard.rows / 9;
-    int cellWidth = sudokuBoard.cols / 9;
-
-    for (int i = 0; i < 9; i++) {
-        for (int j = 0; j < 9; j++) {
-            // Extract cell using simple row/col slicing
-            Mat_<uchar> cell = sudokuBoard(Range(i * cellHeight, (i + 1) * cellHeight),
-                Range(j * cellWidth, (j + 1) * cellWidth));
-
-            // Show the cell
-            imshow("Cell " + to_string(i) + "," + to_string(j), cell);
-            waitKey(100); // small pause to show windows properly
-        }
-    }
-}
 vector<Mat_<uchar>> loadDigitTemplates() {
     _wchdir(projectPath);
     _wchdir(L"Digits");
@@ -766,9 +709,7 @@ vector<Mat_<uchar>> loadDigitTemplates() {
         if (img.empty()) {
             cerr << "Could not load " << filename << endl;
             continue;
-        }
-        /*imshow("Digit " + to_string(digit)  , img);
-        waitKey(100);*/
+        } 
         templates.push_back(img);
     }
     return templates;
@@ -799,22 +740,6 @@ vector<Mat_<uchar>> splitSudokuGrid(const Mat_<uchar>& sudokuBoard, Size templat
         }
     }
     return cells;
-}
-int countBlackPixels(const Mat_<uchar> img) {
-    int count = 0;
-    for (int row = 0; row < img.rows; ++row) {
-        for (int col = 0; col < img.cols; ++col)
-            if (img(row, col) == 0) count++;
-    }
-    return count;
-}
-vector<int> getBlackPixelCounts(const vector<Mat_<uchar>>& digitTemplates) {
-    vector<int> blackCounts;
-    for (const auto& tmpl : digitTemplates) {
-        int black = tmpl.total() - countNonZero(tmpl);
-        blackCounts.push_back(black);
-    }
-    return blackCounts;
 }
 Mat_<uchar> findCellBorder(const Mat_<uchar>& cell, int borderWidth  ) {
     Mat_<uchar> cellNoBorder = cell.clone();
@@ -860,53 +785,6 @@ Mat_<uchar> removeBorderObjects(const Mat_<uchar>& img) {
     }
     return result;
 }
- 
-Mat_<uchar> removeBorderObjectsSimple(const Mat_<uchar>& img) {
-    Mat_<uchar> result = Mat_<uchar>::ones(img.size()) * 255; // Start with white background
-    vector<vector<Point>> objects = borderTraceBlack(img);
-    
-    if (objects.empty()) {
-        return result;
-    }
-    
-    int rows = img.rows, cols = img.cols;
-    Point imgCenter(cols / 2, rows / 2);
-    
-    int bestObjectIndex = -1;
-    double minDistFromCenter = DBL_MAX;
-    
-    // Simply find the object closest to center
-    for (int i = 0; i < objects.size(); i++) {
-        Rect bbox = boundingRect(objects[i]);
-        Point objCenter(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
-        
-        double distFromCenter = sqrt(pow(objCenter.x - imgCenter.x, 2) + 
-                                   pow(objCenter.y - imgCenter.y, 2));
-        
-        // Also check if object is reasonably sized (not too small)
-        double area = bbox.width * bbox.height;
-        if (area > (rows * cols * 0.02) && distFromCenter < minDistFromCenter) {
-            minDistFromCenter = distFromCenter;
-            bestObjectIndex = i;
-        }
-    }
-    
-    // Fill the best object
-    if (bestObjectIndex >= 0) {
-        Rect bbox = boundingRect(objects[bestObjectIndex]);
-        
-        for (int y = bbox.y; y < bbox.y + bbox.height; y++) {
-            for (int x = bbox.x; x < bbox.x + bbox.width; x++) {
-                if (y >= 0 && y < rows && x >= 0 && x < cols && img(y, x) == 0) {
-                    result(y, x) = 0;
-                }
-            }
-        }
-    }
-    
-    return result;
-}
-
 Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(98, 100)) {
     Mat_<uchar> bin;
     threshold(cell, bin, 0, 255, THRESH_BINARY | THRESH_OTSU);
@@ -943,18 +821,17 @@ Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(
 
     return output;
 }
-
 double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl,int i) {
     Mat_<uchar> resizedCell;
     resize(cell, resizedCell, tmpl.size());
     Mat_<uchar> removedBorder = removeBorderObjects(resizedCell );
     Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
-     /*if (i == 0) {
+    /*  if (i == 0) {
         imshow("1", cell);
         imshow("2", removedBorder);
         imshow("3", centered);
         waitKey(0);
-    }  */
+    } */  
     int matchCount = 0, cellBlack = 0, tmplBlack = 0;
     for (int y = 0; y < centered.rows; ++y)
         for (int x = 0; x < centered.cols; ++x) {
@@ -964,29 +841,13 @@ double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl,int i) {
         }
     return 2.0 * matchCount / (cellBlack + tmplBlack);
 }
-int blackPixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl) {
-    Mat_<uchar> resizedCell;
-    resize(cell, resizedCell, tmpl.size());
-    Mat_<uchar> removedBorder = removeBorderObjects(resizedCell);
-    Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
-    /*imshow("im", centered);
-    waitKey(0);*/
-    int count = countBlackPixels(centered);
-    //cout << count;
-    return count;
-}
+ 
 Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat_<uchar>>& digitTemplates) {
     Mat_<int> grid(9, 9); grid.setTo(0);
     for (int idx = 0; idx < cells.size(); ++idx) {
         int row = idx / 9, col = idx % 9;
         Mat_<uchar> cell = cells[idx].clone();
-
-        // Crop borders: remove 1 pixel from each edge (more if borders are thicker)
-        int border = 1;
-        if (cell.rows > 2 * border && cell.cols > 2 * border)
-            cell = cell(Range(border, cell.rows - border), Range(border, cell.cols - border)).clone();
-
-        // Threshold and check for emptiness
+        
         Mat_<uchar> thCell;
         threshold(cell, thCell, 0, 255, THRESH_BINARY | THRESH_OTSU);
 
@@ -1006,23 +867,15 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
             }
         }
         cout << "!!!!!!!!!!!!!!!! Found digit : " << bestDigit << endl;
-        // Only accept confident matches
-        if (bestScore < 0.01)  // adjust threshold if needed
+        
+        if (bestScore < 0.01)  
             grid(row, col) = 0;
         else
             grid(row, col) = bestDigit;
     }
     return grid;
 }
-
-void showFirstNineCells(const vector<Mat_<uchar>>& cells) {
-    int n = min(9, (int)cells.size());
-    for (int i = 0; i < n; ++i) {
-        imshow("Cell " + to_string(i), cells[i]);
-        waitKey(0);  // Wait for key press before showing next
-    }
-    destroyAllWindows();
-}
+ 
 //---------------Load image
 void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
 {
