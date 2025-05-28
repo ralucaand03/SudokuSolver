@@ -89,8 +89,8 @@ void testImageOpenAndSave()
 
     waitKey(0);
 }
-//-----------------------------------Sudoku Solver
-// extrag cells si compar cu o poza de referinta 
+//-----------------------------------------Sudoku Solver
+//
 //---------------Blur
 bool isInside(Mat img, int i, int j) {
     return (i >= 0 && i < img.rows && j >= 0 && j < img.cols);
@@ -485,7 +485,6 @@ vector<vector<Point>> borderTrace(const Mat_<uchar>& img) {
     }
     return allBorders;
 }
-
 vector<vector<Point>> objectPixelsBlack(const Mat_<uchar>& img) {
     int di[8] = { 0, -1, -1, -1, 0,  1,  1, 1 };
     int dj[8] = { 1,  1,  0, -1, -1, -1, 0, 1 };
@@ -523,7 +522,6 @@ vector<vector<Point>> objectPixelsBlack(const Mat_<uchar>& img) {
     }
     return allObjects;
 }
-
 Mat drawBorders(const Mat& img, const vector<vector<Point>>& borders) {
     int thickness = 2;
     Mat result = Mat::zeros(img.size(), CV_8UC3);
@@ -699,48 +697,6 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     return warped;
 }
 //---------------Cells
-vector<Mat_<uchar>> loadDigitTemplates() {
-    _wchdir(projectPath);
-    _wchdir(L"Digits");
-    vector<Mat_<uchar>> templates;
-    for (int digit = 1; digit <= 9; digit++) {
-        string filename = "nr_" + to_string(digit) + ".png";
-        Mat_<uchar> img = imread(filename, IMREAD_GRAYSCALE);
-        if (img.empty()) {
-            cerr << "Could not load " << filename << endl;
-            continue;
-        } 
-        templates.push_back(img);
-    }
-    return templates;
-}
-void printSudokuMatrix(const Mat_<int>& grid) {
-    for (int i = 0; i < grid.rows; i++) {
-        for (int j = 0; j < grid.cols; j++) {
-            cout << grid(i, j) << " ";
-            if ((j + 1) % 3 == 0 && j != grid.cols - 1)
-                cout << "| ";
-        }
-        cout << endl;
-        if ((i + 1) % 3 == 0 && i != grid.rows - 1)
-            cout << "------+-------+------" << endl;
-    }
-}
-vector<Mat_<uchar>> splitSudokuGrid(const Mat_<uchar>& sudokuBoard, Size templateSize = Size(98, 100)) {
-    vector<Mat_<uchar>> cells;
-    int cellHeight = sudokuBoard.rows / 9;
-    int cellWidth = sudokuBoard.cols / 9;
-    for (int row = 0; row < 9; ++row) {
-        for (int col = 0; col < 9; ++col) {
-            Rect cellRect(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
-            Mat_<uchar> cell = sudokuBoard(cellRect).clone();
-            Mat_<uchar> resizedCell;
-            resize(cell, resizedCell, templateSize, 0, 0, INTER_AREA);
-            cells.push_back(resizedCell);
-        }
-    }
-    return cells;
-}
 Mat_<uchar> findCellBorder(const Mat_<uchar>& cell, int borderWidth  ) {
     Mat_<uchar> cellNoBorder = cell.clone();
     int rows = cellNoBorder.rows, cols = cellNoBorder.cols;
@@ -785,6 +741,7 @@ Mat_<uchar> removeBorderObjects(const Mat_<uchar>& img) {
     }
     return result;
 }
+//---------------Digit Recognition
 Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(98, 100)) {
     Mat_<uchar> bin;
     threshold(cell, bin, 0, 255, THRESH_BINARY | THRESH_OTSU);
@@ -841,7 +798,22 @@ double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl,int i) {
         }
     return 2.0 * matchCount / (cellBlack + tmplBlack);
 }
- 
+//---------------Grid
+vector<Mat_<uchar>> splitSudokuGrid(const Mat_<uchar>& sudokuBoard, Size templateSize = Size(98, 100)) {
+    vector<Mat_<uchar>> cells;
+    int cellHeight = sudokuBoard.rows / 9;
+    int cellWidth = sudokuBoard.cols / 9;
+    for (int row = 0; row < 9; ++row) {
+        for (int col = 0; col < 9; ++col) {
+            Rect cellRect(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
+            Mat_<uchar> cell = sudokuBoard(cellRect).clone();
+            Mat_<uchar> resizedCell;
+            resize(cell, resizedCell, templateSize, 0, 0, INTER_AREA);
+            cells.push_back(resizedCell);
+        }
+    }
+    return cells;
+}
 Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat_<uchar>>& digitTemplates) {
     Mat_<int> grid(9, 9); grid.setTo(0);
     for (int idx = 0; idx < cells.size(); ++idx) {
@@ -875,8 +847,35 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
     }
     return grid;
 }
- 
-//---------------Load image
+//---------------Print
+void printSudokuMatrix(const Mat_<int>& grid) {
+    for (int i = 0; i < grid.rows; i++) {
+        for (int j = 0; j < grid.cols; j++) {
+            cout << grid(i, j) << " ";
+            if ((j + 1) % 3 == 0 && j != grid.cols - 1)
+                cout << "| ";
+        }
+        cout << endl;
+        if ((i + 1) % 3 == 0 && i != grid.rows - 1)
+            cout << "------+-------+------" << endl;
+    }
+}
+//---------------Load  
+vector<Mat_<uchar>> loadDigitTemplates() {
+    _wchdir(projectPath);
+    _wchdir(L"Digits");
+    vector<Mat_<uchar>> templates;
+    for (int digit = 1; digit <= 9; digit++) {
+        string filename = "nr_" + to_string(digit) + ".png";
+        Mat_<uchar> img = imread(filename, IMREAD_GRAYSCALE);
+        if (img.empty()) {
+            cerr << "Could not load " << filename << endl;
+            continue;
+        } 
+        templates.push_back(img);
+    }
+    return templates;
+}
 void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
 {
     _wchdir(projectPath);
