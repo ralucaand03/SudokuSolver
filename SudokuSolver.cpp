@@ -20,7 +20,7 @@
 #include <fstream>
 #include <opencv2/ml.hpp>
 #include <opencv2/ml/ml.hpp>
-
+#include <queue>
 using namespace std;
 using namespace cv;
 wchar_t* projectPath;
@@ -485,6 +485,96 @@ vector<vector<Point>> borderTrace(const Mat_<uchar>& img) {
     }
     return allBorders;
 }
+vector<vector<Point>> borderTraceBlack(const Mat_<uchar>& img) {
+    int di[8] = { 0, -1, -1, -1, 0,  1,  1, 1 };
+    int dj[8] = { 1,  1,  0, -1, -1, -1, 0, 1 };
+
+    vector<vector<Point>> allBorders;
+    Mat_<uchar> visited = Mat_<uchar>::zeros(img.size());
+
+    for (int i = 0; i < img.rows; i++) {
+        for (int j = 0; j < img.cols; j++) {
+            if (img(i, j) == 0 && visited(i, j) == 0) { // Changed 255 -> 0
+                vector<Point> border;
+
+                Point startPoint(j, i);
+                Point currentPoint = startPoint;
+                border.push_back(currentPoint);
+                visited(i, j) = 1;
+
+                int dir = 0;
+
+                bool borderComplete = false;
+                while (!borderComplete) {
+                    bool foundNext = false;
+
+                    for (int k = 0; k < 8; k++) {
+                        int newDir = (dir + k) % 8;
+
+                        int ni = currentPoint.y + di[newDir];
+                        int nj = currentPoint.x + dj[newDir];
+
+                        if (ni >= 0 && ni < img.rows && nj >= 0 && nj < img.cols && img(ni, nj) == 0 && visited(ni, nj) == 0) {
+                            currentPoint = Point(nj, ni);
+                            border.push_back(currentPoint);
+                            visited(ni, nj) = 1;
+
+                            dir = (newDir + 5) % 8;
+                            foundNext = true;
+                            break;
+                        }
+                    }
+                    if (!foundNext || (border.size() > 2 && currentPoint == startPoint)) {
+                        borderComplete = true;
+                    }
+                }
+                if (border.size() > 50) {
+                    allBorders.push_back(border);
+                }
+            }
+        }
+    }
+    return allBorders;
+}
+  
+vector<vector<Point>> objectPixelsBlack(const Mat_<uchar>& img) {
+    int di[8] = { 0, -1, -1, -1, 0,  1,  1, 1 };
+    int dj[8] = { 1,  1,  0, -1, -1, -1, 0, 1 };
+
+    vector<vector<Point>> allObjects;
+    Mat_<uchar> visited = Mat_<uchar>::zeros(img.size());
+
+    for (int i = 0; i < img.rows; i++) {
+        for (int j = 0; j < img.cols; j++) {
+            if (img(i, j) == 0 && visited(i, j) == 0) {
+                vector<Point> object;
+                queue<Point> q;
+                q.push(Point(j, i));
+                visited(i, j) = 1;
+
+                while (!q.empty()) {
+                    Point p = q.front(); q.pop();
+                    object.push_back(p);
+
+                    for (int d = 0; d < 8; d++) {
+                        int ni = p.y + di[d];
+                        int nj = p.x + dj[d];
+                        if (ni >= 0 && ni < img.rows && nj >= 0 && nj < img.cols &&
+                            img(ni, nj) == 0 && visited(ni, nj) == 0) {
+                            q.push(Point(nj, ni));
+                            visited(ni, nj) = 1;
+                        }
+                    }
+                }
+                if (object.size() > 50) { // adjust threshold as needed
+                    allObjects.push_back(object);
+                }
+            }
+        }
+    }
+    return allObjects;
+}
+
 Mat drawBorders(const Mat& img, const vector<vector<Point>>& borders) {
     int thickness = 2;
     Mat result = Mat::zeros(img.size(), CV_8UC3);
@@ -544,24 +634,24 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
 {
     Mat gray;
     cvtColor(sudokuImage, gray, COLOR_BGR2GRAY);
-   /* imshow("Gray Image", gray);
-    waitKey(0);*/
+    /* imshow("Gray Image", gray);
+     waitKey(0);*/
 
-    //-----Blur  
-    //Mat_<uchar> blurred = gaussian_2D(gray, 4);
-    //imshow("Blurred Image", blurred);
-    //waitKey(0);
+     //-----Blur  
+     //Mat_<uchar> blurred = gaussian_2D(gray, 4);
+     //imshow("Blurred Image", blurred);
+     //waitKey(0);
 
-    //-----Treshhold  
-    /*Mat_<uchar> thresh = thresholding(blurred);
-    imshow("Threshold Image", thresh);
-    waitKey(0);*/
+     //-----Treshhold  
+     /*Mat_<uchar> thresh = thresholding(blurred);
+     imshow("Threshold Image", thresh);
+     waitKey(0);*/
     Mat_<uchar> thresh = canny_edge_detection(gray);
     /*imshow("Threshold Image", thresh);
     waitKey(0);*/
     Mat_<uchar> thresh2 = edge_linking(thresh, 100, 170);
-   /* imshow("Threshold Image", thresh2);
-    waitKey(0);*/
+    /* imshow("Threshold Image", thresh2);
+     waitKey(0);*/
     uchar data[] = {
         0,   0,   0,
         0,   0,   0,
@@ -569,13 +659,13 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     };
     Mat_<uchar> str_el(3, 3, data);
     Mat_<uchar> dil = dilation(thresh2, str_el);
-   /* imshow("Threshold Image Dilatation", dil);
-    waitKey(0);*/
-    //-----Contours 
+    /* imshow("Threshold Image Dilatation", dil);
+     waitKey(0);*/
+     //-----Contours 
     vector<vector<Point>> contours = borderTrace(dil);
     Mat contourImage2 = drawBorders(sudokuImage, contours);
-   /* imshow("All Contours", contourImage2);
-    waitKey(0);*/
+    /* imshow("All Contours", contourImage2);
+     waitKey(0);*/
 
     double maxArea = 0;
     vector<Point> biggest;
@@ -600,8 +690,8 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     {
         vector<vector<Point>> drawBiggest = { biggest };
         Mat boardOutline = drawBorders(sudokuImage, drawBiggest);
-       /* imshow("Biggest Contour", boardOutline);
-        waitKey(0);*/
+        /* imshow("Biggest Contour", boardOutline);
+         waitKey(0);*/
     }
 
 
@@ -726,90 +816,14 @@ vector<int> getBlackPixelCounts(const vector<Mat_<uchar>>& digitTemplates) {
     }
     return blackCounts;
 }
-//int recognizeDigit(const Mat_<uchar>& cell, const vector<Mat_<uchar>>& digitTemplates) {
-//    // Preprocess the cell for better matching
-//    Mat_<uchar> processedCell;
-//    threshold(cell, processedCell, 0, 255, THRESH_BINARY_INV | THRESH_OTSU);
-//
-//    // Remove noise (optional, but improves results)
-//    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
-//    morphologyEx(processedCell, processedCell, MORPH_OPEN, kernel);
-//
-//    int bestDigit = 0;
-//    double bestScore = -1.0;
-//
-//    for (int i = 0; i < digitTemplates.size(); ++i) {
-//        // Resize cell digit to template size
-//        Mat_<uchar> resizedCell;
-//        resize(processedCell, resizedCell, digitTemplates[i].size());
-//
-//        // Compare using matchTemplate
-//        Mat result;
-//        matchTemplate(resizedCell, digitTemplates[i], result, TM_CCOEFF_NORMED);
-//
-//        double minVal, maxVal;
-//        Point minLoc, maxLoc;
-//        minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
-//
-//        if (maxVal > bestScore) {
-//            bestScore = maxVal;
-//            bestDigit = i + 1; // digits are 1-indexed
-//        }
-//    }
-//
-//    // Optional: Set a threshold for confidence, e.g., 0.4
-//    if (bestScore < 0.4) return 0; // Consider cell empty if confidence is too low
-//
-//    return bestDigit;
-//}
-//Mat_<int> recognizeSudokuGrid(const Mat_<uchar>& sudokuBoard, const vector<Mat_<uchar>>& digitTemplates) {
-//    Mat_<int> grid(9, 9); grid.setTo(0);
-//    int cellHeight = sudokuBoard.rows / 9;
-//    int cellWidth = sudokuBoard.cols / 9;
-//    for (int row = 0; row < 9; row++) {
-//        for (int col = 0; col < 9; col++) {
-//            Rect cellRect(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
-//            Mat_<uchar> cell = sudokuBoard(cellRect).clone();
-//            Mat_<uchar> processedCell;
-//            threshold(cell, processedCell, 0, 255, THRESH_BINARY_INV | THRESH_OTSU);
-//            double blackRatio = (processedCell.total() - countNonZero(processedCell)) / double(cellWidth * cellHeight);
-//            if (blackRatio < 0.08) { grid(row, col) = 0; continue; }
-//            Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
-//            morphologyEx(processedCell, processedCell, MORPH_OPEN, kernel);
-//            int bestDigit = 0;
-//            double bestDiff = 1e9;
-//            for (int i = 0; i < digitTemplates.size(); ++i) {
-//                Mat_<uchar> tmpl = digitTemplates[i].clone();
-//                Mat_<uchar> resizedCell, resizedTemplate;
-//                resize(processedCell, resizedCell, tmpl.size());
-//                threshold(tmpl, resizedTemplate, 0, 255, THRESH_BINARY_INV | THRESH_OTSU);
-//                int cellBlack = resizedCell.total() - countNonZero(resizedCell);
-//                int tmplBlack = resizedTemplate.total() - countNonZero(resizedTemplate);
-//                int cellMid = resizedCell.rows / 2;
-//                int tmplMid = resizedTemplate.rows / 2;
-//                int cellBlackTop = resizedCell(Range(0, cellMid), Range::all()).total() - countNonZero(resizedCell(Range(0, cellMid), Range::all()));
-//                int cellBlackBottom = resizedCell(Range(cellMid, resizedCell.rows), Range::all()).total() - countNonZero(resizedCell(Range(cellMid, resizedCell.rows), Range::all()));
-//                int tmplBlackTop = resizedTemplate(Range(0, tmplMid), Range::all()).total() - countNonZero(resizedTemplate(Range(0, tmplMid), Range::all()));
-//                int tmplBlackBottom = resizedTemplate(Range(tmplMid, resizedTemplate.rows), Range::all()).total() - countNonZero(resizedTemplate(Range(tmplMid, resizedTemplate.rows), Range::all()));
-//                double diff = abs(cellBlack - tmplBlack)
-//                    + abs(cellBlackTop - tmplBlackTop)
-//                    + abs(cellBlackBottom - tmplBlackBottom);
-//                if (diff < bestDiff) { bestDiff = diff; bestDigit = i + 1; }
-//            }
-//            if (bestDiff > 0.5 * cellWidth * cellHeight) grid(row, col) = 0;
-//            else grid(row, col) = bestDigit;
-//        }
-//    }
-//    return grid;
-//}
-Mat_<uchar> removeCellBorder(const Mat_<uchar>& cell, int borderWidth = 2) {
+Mat_<uchar> findCellBorder(const Mat_<uchar>& cell, int borderWidth  ) {
     Mat_<uchar> cellNoBorder = cell.clone();
-    int rows = cellNoBorder.rows, cols = cellNoBorder.cols; 
+    int rows = cellNoBorder.rows, cols = cellNoBorder.cols;
     for (int y = 0; y < borderWidth; ++y)
         for (int x = 0; x < cols; ++x) {
             cellNoBorder(y, x) = 255;                         // Top
             cellNoBorder(rows - 1 - y, x) = 255;              // Bottom
-        } 
+        }
     for (int y = 0; y < rows; ++y)
         for (int x = 0; x < borderWidth; ++x) {
             cellNoBorder(y, x) = 255;                         // Left
@@ -817,52 +831,143 @@ Mat_<uchar> removeCellBorder(const Mat_<uchar>& cell, int borderWidth = 2) {
         }
     return cellNoBorder;
 }
-Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, cv::Size targetSize = Size(98, 100)) {
-    // 1. Find bounding box of black pixels
+Mat_<uchar> removeBorderObjects(const Mat_<uchar>& img) {
+    Mat_<uchar> result(img.rows, img.cols);
+    result.setTo(255);
+
+    vector<vector<Point>> objects = objectPixelsBlack(img);
+    if (objects.empty()) {
+        return result;  
+    }
+    Mat_<uchar> noBorder  (img.rows, img.cols);
+    noBorder.setTo(0);
+    Mat_<uchar> noBorder2 = findCellBorder(noBorder, 5);
+
+
+    for (const auto& obj : objects) {
+        bool touchesBorder = false;
+        for (const auto& pt : obj) {
+            if (noBorder2(pt.y, pt.x) == 255) {
+                touchesBorder = true;
+                break;
+            }
+        }
+        if (!touchesBorder) {
+            for (const auto& pt : obj) {
+                result(pt.y, pt.x) = 0;
+            }
+        }
+    }
+    return result;
+}
+ 
+Mat_<uchar> removeBorderObjectsSimple(const Mat_<uchar>& img) {
+    Mat_<uchar> result = Mat_<uchar>::ones(img.size()) * 255; // Start with white background
+    vector<vector<Point>> objects = borderTraceBlack(img);
+    
+    if (objects.empty()) {
+        return result;
+    }
+    
+    int rows = img.rows, cols = img.cols;
+    Point imgCenter(cols / 2, rows / 2);
+    
+    int bestObjectIndex = -1;
+    double minDistFromCenter = DBL_MAX;
+    
+    // Simply find the object closest to center
+    for (int i = 0; i < objects.size(); i++) {
+        Rect bbox = boundingRect(objects[i]);
+        Point objCenter(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
+        
+        double distFromCenter = sqrt(pow(objCenter.x - imgCenter.x, 2) + 
+                                   pow(objCenter.y - imgCenter.y, 2));
+        
+        // Also check if object is reasonably sized (not too small)
+        double area = bbox.width * bbox.height;
+        if (area > (rows * cols * 0.02) && distFromCenter < minDistFromCenter) {
+            minDistFromCenter = distFromCenter;
+            bestObjectIndex = i;
+        }
+    }
+    
+    // Fill the best object
+    if (bestObjectIndex >= 0) {
+        Rect bbox = boundingRect(objects[bestObjectIndex]);
+        
+        for (int y = bbox.y; y < bbox.y + bbox.height; y++) {
+            for (int x = bbox.x; x < bbox.x + bbox.width; x++) {
+                if (y >= 0 && y < rows && x >= 0 && x < cols && img(y, x) == 0) {
+                    result(y, x) = 0;
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(98, 100)) {
     Mat_<uchar> bin;
-    threshold(cell, bin, 0, 255, THRESH_BINARY | THRESH_OTSU); // White bg, black digit
-    // Invert for findNonZero (so digit=white on black)
-    Mat inv = 255 - bin;
+    threshold(cell, bin, 0, 255, THRESH_BINARY | THRESH_OTSU);
+
+    // Pad the image with white border before finding bbox
+    int pad = max(cell.rows, cell.cols) / 10; // 10% of size, you can tweak
+    Mat_<uchar> padded(bin.rows + 2 * pad, bin.cols + 2 * pad, uchar(255));
+    bin.copyTo(padded(Rect(pad, pad, bin.cols, bin.rows)));
+
+    // Invert and find bbox of black pixels (now safe from cropping at border)
+    Mat inv = 255 - padded;
     vector<Point> pts;
     findNonZero(inv, pts);
-    if (pts.empty()) // If empty, just return blank image
+    if (pts.empty())
         return Mat_<uchar>(targetSize, uchar(255));
     Rect bbox = boundingRect(pts);
-    Mat digitCrop = bin(bbox);
+    Mat digitCrop = padded(bbox);
 
-    // 2. Compute scale to fit inside targetSize with margin
-    int margin = 6; // like Pillow's natural text padding
-    int maxW = targetSize.width - 2 * margin, maxH = targetSize.height - 2 * margin;
-    double scale =  min(double(maxW) / bbox.width, double(maxH) / bbox.height);
-    int newW =  max(1, int(bbox.width * scale));
-    int newH = max(1, int(bbox.height * scale));
+    // Compute scale for 80% of target size
+    int targetW = int(targetSize.width * 0.8);
+    int targetH = int(targetSize.height * 0.8);
+    double scale = min(double(targetW) / digitCrop.cols, double(targetH) / digitCrop.rows);
+    int newW = max(1, int(digitCrop.cols * scale));
+    int newH = max(1, int(digitCrop.rows * scale));
+
     Mat digitResized;
     resize(digitCrop, digitResized, Size(newW, newH), 0, 0, INTER_AREA);
 
-    // 3. Place centered in white canvas
+    // Center in output
     Mat_<uchar> output(targetSize, uchar(255));
     int x = (targetSize.width - newW) / 2;
     int y = (targetSize.height - newH) / 2;
     digitResized.copyTo(output(Rect(x, y, newW, newH)));
+
     return output;
 }
-double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl) {
+
+double pixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl,int i) {
     Mat_<uchar> resizedCell;
-    resize(cell, resizedCell, tmpl.size()); 
-    Mat_<uchar> removedBorder = removeCellBorder(resizedCell,14);
+    resize(cell, resizedCell, tmpl.size());
+    Mat_<uchar> removedBorder = removeBorderObjects(resizedCell );
     Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
-    /*imshow("im", centered);
-    waitKey(0); */
-    int matchCount = 0, total = cell.rows * cell.cols;
+     /*if (i == 0) {
+        imshow("1", cell);
+        imshow("2", removedBorder);
+        imshow("3", centered);
+        waitKey(0);
+    }  */
+    int matchCount = 0, cellBlack = 0, tmplBlack = 0;
     for (int y = 0; y < centered.rows; ++y)
-        for (int x = 0; x < centered.cols; ++x)
+        for (int x = 0; x < centered.cols; ++x) {
             if (centered(y, x) == 0 && tmpl(y, x) == 0) matchCount++;
-    return double(matchCount);  
+            if (centered(y, x) == 0  ) cellBlack++;
+            if ( tmpl(y, x) == 0) tmplBlack++;
+        }
+    return 2.0 * matchCount / (cellBlack + tmplBlack);
 }
 int blackPixelMatchScore(const Mat_<uchar>& cell, const Mat_<uchar>& tmpl) {
     Mat_<uchar> resizedCell;
     resize(cell, resizedCell, tmpl.size());
-    Mat_<uchar> removedBorder = removeCellBorder(resizedCell, 14);
+    Mat_<uchar> removedBorder = removeBorderObjects(resizedCell);
     Mat_<uchar> centered = centerAndScaleDigit(removedBorder);
     /*imshow("im", centered);
     waitKey(0);*/
@@ -893,14 +998,16 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
         int bestDigit = 0;
         double bestScore = 0.0;
         for (int i = 0; i < digitTemplates.size(); ++i) {
-            double score = pixelMatchScore(thCell, digitTemplates[i]);
+            double score = pixelMatchScore(thCell, digitTemplates[i],i);
+            cout << "Digit score for : " << i + 1 << " : " << score << endl;
             if (score > bestScore) {
                 bestScore = score;
                 bestDigit = i + 1;
             }
         }
+        cout << "!!!!!!!!!!!!!!!! Found digit : " << bestDigit << endl;
         // Only accept confident matches
-        if (bestScore < 20)  // adjust threshold if needed
+        if (bestScore < 0.01)  // adjust threshold if needed
             grid(row, col) = 0;
         else
             grid(row, col) = bestDigit;
@@ -933,8 +1040,7 @@ void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
         }
         resize(sudokuImage, sudokuImage, Size(600, 600));
         imshow("Loaded Sudoku Image", sudokuImage);
-        waitKey(0);
-        //cout << "------+-------+------" << endl;
+        waitKey(0); 
         Mat_<uchar> wrappedSudoku = localizeSudoku(sudokuImage);
         vector<Mat_<uchar>> cells = splitSudokuGrid(wrappedSudoku);
         //showFirstNineCells(cells);
