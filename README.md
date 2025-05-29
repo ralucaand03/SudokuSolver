@@ -15,7 +15,8 @@ This project is an **Automatic Sudoku Solver** that uses advanced image processi
 
 |      ⬇️ **Input**      |     ⬆️ **Output**     |
 |:----------------------:|:--------------------:|
-| ![Input Example](./SS/desc_input.png) <br> *A scanned or photographed image (JPG, PNG, BMP) containing a clear Sudoku grid.* | ![Output Example](./SS/desc_output.png) <br> *A digital display of the recognized and solved Sudoku puzzle.* |
+| <img src="./SS/desc_input.png" width="220"/> <br> *A scanned or photographed image (JPG, PNG, BMP) containing a clear Sudoku grid.* | <img src="./SS/result_solved.png" width="220"/> <br> *A digital display of the recognized and solved Sudoku puzzle.* |
+
 
  
 🌱 *Fast, fully automatic, and robust to real-world image imperfections!*
@@ -26,16 +27,16 @@ This project is an **Automatic Sudoku Solver** that uses advanced image processi
 > [!Tip]
 >  For best results, make sure your input images follow these guidelines:
 
-- ☀️ **Brightness:**  
+-   **Brightness:**  
   The image must **not be too dark** – digits and grid lines should be clearly visible.
 
-- 🔄 **Orientation:**  
+-   **Orientation:**  
   The Sudoku grid should **not be upside down or rotated**; keep it upright and aligned.
 
-- 🧩 **Completeness:**  
+-   **Completeness:**  
   The grid should be **complete** and contain only **one Sudoku puzzle** per image.
 
-- 🔢 **Digit Clarity:**  
+-   **Digit Clarity:**  
   Digits should be **clear** and printed in a **standard font** (avoid handwriting or unusual styles).
 
 
@@ -46,16 +47,16 @@ This project is an **Automatic Sudoku Solver** that uses advanced image processi
 
 This project processes Sudoku images through the following main steps:
 
-1. 🖼️ **Input Image:** User selects a scanned or photographed Sudoku puzzle.
-2. 🛠️ **Preprocessing:** Convert to grayscale, blur, and threshold to enhance grid and digits.
-3. 🔳 **Grid Detection:** Detect the Sudoku grid with edge detection and perspective correction.
-4. 🔢 **Cell Segmentation:** Split the grid into 81 individual cell images.
-5. 🔍 **Digit Recognition:** Clean, center, and compare each cell with digit templates.
-6. 🧠 **Sudoku Solver:** Solve the grid using a backtracking algorithm.
-7. 🖥️ **Result Display:** Display the recognized and solved Sudoku digitally.
+1.   **Input Image:** User selects a scanned or photographed Sudoku puzzle.
+2.   **Preprocessing:** Convert to grayscale, blur, and threshold to enhance grid and digits.
+3.   **Grid Detection:** Detect the Sudoku grid with edge detection and perspective correction.
+4.   **Cell Segmentation:** Split the grid into 81 individual cell images.
+5.   **Digit Recognition:** Clean, center, and compare each cell with digit templates.
+6.   **Sudoku Solver:** Solve the grid using a backtracking algorithm.
+7.   **Result Display:** Display the recognized and solved Sudoku digitally.
 
 ---
-## 🛠️ Implementation Steps
+## 🪁 Implementation Steps
 
 >### Step 1. Grid Detection & Localization
  
@@ -140,7 +141,6 @@ Templates used for comparison contain black digits that fill **80% of the image 
 ![🎯 Step - Digit Centering](./SS/step_digit_centering.png)
 
 >### 🔍 Step 3. Digit Recognition
- 
 
 #### 🏷️ Template Matching
 
@@ -168,6 +168,10 @@ pixelMatchScore(cell_image, template_image):
     score = 2 * match_count / (cell_black + template_black)
     return score
 ```
+
+> ### 🧮 Step 4. Solving the Sudoku
+
+The recognized grid is solved using a classic **backtracking algorithm**, which fills in the empty cells one by one and backtracks when a conflict is found, ensuring a valid and complete solution for the puzzle.
 
 ---
 ## 🏁 Results
