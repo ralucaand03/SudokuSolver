@@ -499,7 +499,7 @@ vector<Point2f> sortCorners(const vector<Point>& corners) {
     ordered[3] = corners[brIdx]; // Bottom-right
     return ordered;
 }
-Mat warpSudokuBoard(const Mat& inputImage, const vector<Point>& corners, Size outputSize = Size(800, 800)) {
+Mat warpSudokuBoard(const Mat& inputImage, const vector<Point>& corners, Size outputSize = Size(600, 600)) {
     if (corners.size() != 4) {
         cerr << "Error: corners vector must contain exactly 4 points." << endl;
         return inputImage.clone();
@@ -520,7 +520,7 @@ Mat warpSudokuBoard(const Mat& inputImage, const vector<Point>& corners, Size ou
     Mat matrix = getPerspectiveTransform(src, dst);
 
     Mat warped;
-    warpPerspective(inputImage, warped, matrix, outputSize);
+    warpPerspective(inputImage, warped, matrix, outputSize, INTER_LINEAR, BORDER_CONSTANT, Scalar(255, 255, 255));
 
     return warped;
 }
@@ -620,6 +620,91 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
     imshow("Warped Sudoku Board", warped);
     waitKey(0); 
 
+    return warped;
+}
+Mat_<uchar> localizeSudoku_noSteps(Mat& sudokuImage)
+{
+    //Same as localizeSudoku - just not showing the steps
+    Mat gray;
+    cvtColor(sudokuImage, gray, COLOR_BGR2GRAY);
+      
+    //-----Blur & Treshhold & Edge detection
+    Mat_<uchar> edges = canny_edge_detection(gray);
+     
+    Mat_<uchar> linked = edge_linking(edges, 100, 170);
+    
+    uchar data[] = {
+        0,   0,   0,
+        0,   0,   0,
+        0,   0,   0
+    };
+
+    //-----Dilation to make the borders bigger
+    Mat_<uchar> str_el(3, 3, data);
+    Mat_<uchar> dil = dilation(linked, str_el);
+
+    //-----Contours 
+    vector<vector<Point>> contours = borderTrace(dil);
+    Mat contourImage2 = drawBorders(sudokuImage, contours);
+      
+    //Find biggest contour
+    double maxArea = 0;
+    vector<Point> biggest;
+    for (auto& contour : contours)
+    {
+        double area = contourArea(contour);
+        if (area > maxArea)
+        {
+            vector<Point> approx;
+            approxPolyDP(contour, approx, 0.02 * arcLength(contour, true), true);
+            if (approx.size() == 4)
+            {
+                biggest = approx;
+                maxArea = area;
+            }
+        }
+    }
+
+    if (biggest.size() == 4)
+    {
+        vector<vector<Point>> drawBiggest = { biggest };
+        Mat boardOutline = drawBorders(sudokuImage, drawBiggest);
+         
+    }
+
+
+    if (biggest.size() != 4)
+    {
+        printf("No Sudoku grid detected.\n");
+        return sudokuImage;
+    }
+
+    Point2f src[4];
+
+    sort(biggest.begin(), biggest.end(), [](Point a, Point b) { return a.y < b.y; });
+    if (biggest[0].x < biggest[1].x)
+    {
+        src[0] = biggest[0];
+        src[1] = biggest[1];
+    }
+    else
+    {
+        src[0] = biggest[1];
+        src[1] = biggest[0];
+    }
+
+    if (biggest[2].x < biggest[3].x)
+    {
+        src[2] = biggest[2];
+        src[3] = biggest[3];
+    }
+    else
+    {
+        src[2] = biggest[3];
+        src[3] = biggest[2];
+    }
+
+    Mat warped = warpSudokuBoard(sudokuImage, biggest); 
     return warped;
 }
 //---------------Cells
@@ -848,6 +933,7 @@ Mat drawSudokuMatrix(const Mat_<int>& grid,int ok, int cellSize = 50) {
             }
         }
     }
+    resize(sudokuImg, sudokuImg, Size(600, 600));
     if (ok == 1) {
         imshow("Solved Sudoku", sudokuImg);
     }
@@ -873,6 +959,25 @@ vector<Mat_<uchar>> loadDigitTemplates() {
     }
     //My data set conytains 135 pictures
     return templates;
+}
+vector<Mat_<uchar>> loadImages() {
+    _wchdir(projectPath);
+    _wchdir(L"Images");
+    vector<Mat_<uchar>> images;
+    for (int digit = 1; digit <= 20; digit++) {
+        string filename = "sudoku_" + to_string(digit) + ".png";
+        Mat_<uchar> img = imread(filename, IMREAD_GRAYSCALE);
+        if (img.empty()) {
+            string filename = "sudoku_" + to_string(digit) + ".jpg";
+            img = imread(filename, IMREAD_GRAYSCALE);
+            if (img.empty()) {
+                cerr << "Could not load " << filename << endl;
+                continue;
+            }
+        }
+        images.push_back(img);
+    } 
+    return images;
 }
 void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
 {
@@ -906,12 +1011,48 @@ void loadSudokuImage(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
         break;
     }
 }
+void seeSudoku(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
+{
+    _wchdir(projectPath);
+    _wchdir(L"Images");
+
+    char fname[MAX_PATH];
+    while (openFileDlg(fname))
+    {
+        sudokuImage = imread(fname, IMREAD_COLOR);
+        if (sudokuImage.empty())
+        {
+            printf("Could not open or find the Sudoku image!\n");
+            continue;
+        }
+        resize(sudokuImage, sudokuImage, Size(600, 600));
+        
+        Mat_<uchar> wrappedSudoku = localizeSudoku_noSteps(sudokuImage);
+        resize(wrappedSudoku, wrappedSudoku, Size(600, 600));
+        imshow("Sudoku Image", wrappedSudoku);
+        waitKey(0);
+        vector<Mat_<uchar>> cells = splitSudokuGrid(wrappedSudoku);
+        Mat_<int> grid = recognizeSudokuGrid(cells, digitTemplates);
+        cout << " Unsolved Sudoku " << endl;
+        printSudokuMatrix(grid);
+        drawSudokuMatrix(grid, 0);
+        waitKey(0);
+        Mat_<int> solved = solveSudoku(grid);
+        cout << " Solved Sudoku " << endl;
+        printSudokuMatrix(solved);
+        drawSudokuMatrix(solved, 1);
+        waitKey(0);
+        break;
+    }
+}
+//---------------Accuracy
 
 int main()
 {
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_FATAL);
     projectPath = _wgetcwd(0, 0);
     vector<Mat_<uchar>> digitTemplates = loadDigitTemplates();
+    vector<Mat_<uchar>> sudokuImages = loadImages();
 
     int op;
     do
@@ -919,17 +1060,23 @@ int main()
         system("cls");
         destroyAllWindows();
         printf("Sudoku solver:\n");
-        printf("1. Load Sudoku Image\n");
+        printf("1. See Sudoku solving process\n");
+        printf("2. Solve Sudoku\n");
+        printf("3. Accuracy\n");
+
         printf("0. Exit\n");
         printf("Option: ");
         scanf("%d", &op);
 
         if (op == 1)
         {
+            Mat sudokuImage; 
+            loadSudokuImage(sudokuImage, digitTemplates); 
+        }
+        if (op == 2)
+        {
             Mat sudokuImage;
-
-            loadSudokuImage(sudokuImage, digitTemplates);
-
+            seeSudoku(sudokuImage, digitTemplates);
         }
 
     } while (op != 0);
