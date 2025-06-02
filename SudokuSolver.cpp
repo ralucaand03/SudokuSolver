@@ -575,7 +575,6 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
         }
     }
 
-
     if (biggest.size() == 4)
     {
         vector<vector<Point>> drawBiggest = { biggest };
@@ -672,13 +671,11 @@ Mat_<uchar> removeBorderObjects(const Mat_<uchar>& img) {
 Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(98, 100)) {
     Mat_<uchar> bin;
     threshold(cell, bin, 0, 255, THRESH_BINARY | THRESH_OTSU);
-
-    // Pad the image with white border before finding bbox
-    int pad = max(cell.rows, cell.cols) / 10; // 10% of size, you can tweak
+ 
+    int pad = max(cell.rows, cell.cols) / 10;  
     Mat_<uchar> padded(bin.rows + 2 * pad, bin.cols + 2 * pad, uchar(255));
     bin.copyTo(padded(Rect(pad, pad, bin.cols, bin.rows)));
-
-    // Invert and find bbox of black pixels (now safe from cropping at border)
+     
     Mat inv = 255 - padded;
     vector<Point> pts;
     findNonZero(inv, pts);
@@ -686,8 +683,7 @@ Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(
         return Mat_<uchar>(targetSize, uchar(255));
     Rect bbox = boundingRect(pts);
     Mat digitCrop = padded(bbox);
-
-    // Compute scale for 80% of target size
+     
     int targetW = int(targetSize.width * 0.8);
     int targetH = int(targetSize.height * 0.8);
     double scale = min(double(targetW) / digitCrop.cols, double(targetH) / digitCrop.rows);
@@ -696,8 +692,7 @@ Mat_<uchar> centerAndScaleDigit(const Mat_<uchar>& cell, Size targetSize = Size(
 
     Mat digitResized;
     resize(digitCrop, digitResized, Size(newW, newH), 0, 0, INTER_AREA);
-
-    // Center in output
+     
     Mat_<uchar> output(targetSize, uchar(255));
     int x = (targetSize.width - newW) / 2;
     int y = (targetSize.height - newH) / 2;
@@ -737,7 +732,9 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
         int row = idx / 9, col = idx % 9;
         Mat_<uchar> cell = cells[idx].clone();
         //Thresholding the cell
+        
         Mat_<uchar> thCell = thresholding(cell);
+    
         //Resize
         Mat_<uchar> resizedCell;
         resize(thCell, resizedCell, digitTemplates[0].size());
@@ -748,7 +745,12 @@ Mat_<int> recognizeSudokuGrid(const vector<Mat_<uchar>>& cells, const vector<Mat
         double blackRatio = (centered.total() - countNonZero(centered)) / double(centered.total());
         if (blackRatio < 0.07) { 
             grid(row, col) = 0; continue; 
-        }
+        }    
+       /* imshow("im1", cell); 
+        imshow("im2",thCell);
+        imshow("im3", removedBorder);
+        imshow("im4", centered);
+        waitKey(0);*/
         //Digit Recognition
         int bestDigit = 0;
         double bestScore = 0.0;
