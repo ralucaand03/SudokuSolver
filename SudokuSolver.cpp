@@ -625,8 +625,22 @@ Mat_<uchar> localizeSudoku(Mat& sudokuImage)
 Mat_<uchar> localizeSudoku_noSteps(Mat& sudokuImage)
 {
     //Same as localizeSudoku - just not showing the steps
+    if (sudokuImage.empty()) {
+        printf("Input image is empty!\n");
+        return sudokuImage;
+    }
+
     Mat gray;
-    cvtColor(sudokuImage, gray, COLOR_BGR2GRAY);
+    if (sudokuImage.channels() == 3) {
+        cvtColor(sudokuImage, gray, COLOR_BGR2GRAY);
+    }
+    else if (sudokuImage.channels() == 1) {
+        gray = sudokuImage.clone();
+    }
+    else {
+        printf("Unsupported image format!\n");
+        return sudokuImage;
+    }
       
     //-----Blur & Treshhold & Edge detection
     Mat_<uchar> edges = canny_edge_detection(gray);
@@ -964,11 +978,11 @@ vector<Mat_<uchar>> loadImages() {
     _wchdir(projectPath);
     _wchdir(L"Images");
     vector<Mat_<uchar>> images;
-    for (int digit = 1; digit <= 20; digit++) {
+    for (int digit = 1; digit <= 20 ; digit++) {
         string filename = "sudoku_" + to_string(digit) + ".png";
         Mat_<uchar> img = imread(filename, IMREAD_GRAYSCALE);
         if (img.empty()) {
-            string filename = "sudoku_" + to_string(digit) + ".jpg";
+            filename = "sudoku_" + to_string(digit) + ".jpg";
             img = imread(filename, IMREAD_GRAYSCALE);
             if (img.empty()) {
                 cerr << "Could not load " << filename << endl;
@@ -1046,6 +1060,72 @@ void seeSudoku(Mat& sudokuImage, vector<Mat_<uchar>> digitTemplates)
     }
 }
 //---------------Accuracy
+bool isAccurateSudoku(const Mat_<int>& inputGrid) { 
+    for (int row = 0; row < 9; row++) {
+        for (int col = 0; col < 9; col++) {
+            int num = inputGrid(row, col);
+            if (num == 0) continue; 
+            Mat_<int> tempGrid = inputGrid.clone();
+            tempGrid(row, col) = 0;
+            if (!isValid(tempGrid, row, col, num)) { 
+                return false;
+            }
+        }
+    } 
+    Mat_<int> tryGrid = inputGrid.clone();
+    if (!solveSudokuHelper(tryGrid)) { 
+        return false;
+    }
+    return true; 
+}
+Mat showAccuracyImage(int count, int total_no) {
+    double percent = 100.0 * count / total_no;
+    char buf[128];
+    sprintf(buf, "Accuracy: %d/%d images (%.2f%%) are OK!", count, total_no, percent);
+     
+    int width = 1000, height = 120;
+    Mat img(height, width, CV_8UC3, Scalar(0, 0, 0));
+     
+    int font = FONT_HERSHEY_SIMPLEX;
+    double fontScale = 1.3;
+    int thickness = 2;
+    int baseline = 0; 
+    Size textSize = getTextSize(buf, font, fontScale, thickness, &baseline);
+    Point textOrg((width - textSize.width) / 2, (height + textSize.height) / 2);
+     
+    Scalar color = (percent > 80) ? Scalar(0, 120, 0) : Scalar(0, 0, 170);
+    putText(img, buf, textOrg, font, fontScale, color, thickness);
+     
+    return img;
+}
+
+void seeAccuracy(const vector<Mat_<uchar>>& sudokuImages, const vector<Mat_<uchar>>& digitTemplates) {
+     int count = 0, total_no = (int)sudokuImages.size(), i=0;
+     printf("Loaded Sudoku images: %d\n", (int)sudokuImages.size());
+     printf("Incorrect / Unsolvable puzzles found at :");
+     for (const Mat_<uchar>& sudokuImageOrig : sudokuImages) {
+         i++;
+         if (sudokuImageOrig.empty()) {
+             printf("Image  is empty!\n");
+             break;
+         }
+         Mat  sudokuImage = sudokuImageOrig.clone();
+         resize(sudokuImage, sudokuImage, Size(600, 600));
+         Mat_<uchar> wrappedSudoku = localizeSudoku_noSteps((Mat)sudokuImage);
+         resize(wrappedSudoku, wrappedSudoku, Size(600, 600));
+         vector<Mat_<uchar>> cells = splitSudokuGrid(wrappedSudoku);
+         Mat_<int> grid = recognizeSudokuGrid(cells, digitTemplates);
+         bool ok = isAccurateSudoku(grid);
+         if (ok) count++;
+         else  printf(" % d ", i);
+     }
+     printf("\nAccuracy: %d/%d images (%.2f%%) were recognized and solved successfully!\n", count, i, 100.0 * count / total_no);
+  
+     Mat resultImg = showAccuracyImage(count, i); 
+     imshow("Accuracy", resultImg);
+     waitKey(0);
+
+}
 
 int main()
 {
@@ -1060,7 +1140,7 @@ int main()
         system("cls");
         destroyAllWindows();
         printf("Sudoku solver:\n");
-        printf("1. See Sudoku solving process\n");
+        printf("1. See step by step Sudoku solving process\n");
         printf("2. Solve Sudoku\n");
         printf("3. Accuracy\n");
 
@@ -1078,7 +1158,10 @@ int main()
             Mat sudokuImage;
             seeSudoku(sudokuImage, digitTemplates);
         }
-
+        if (op == 3)
+        {
+            seeAccuracy(sudokuImages, digitTemplates); 
+        }
     } while (op != 0);
 
     return 0;
